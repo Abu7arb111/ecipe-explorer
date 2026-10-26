@@ -1,0 +1,40 @@
+// !$*UTF8*$!
+{
+ archiveVersion = 1;
+ classes = {};
+ objectVersion = 56;
+ objects = {
+  45AF19B46DAD5417B3DA6FE7 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeExplorerApp.swift; sourceTree = "<group>"; };
+  EA4705AB015957B584C3DCF4 = { isa = PBXBuildFile; fileRef = 45AF19B46DAD5417B3DA6FE7; };
+  95F8A67ABA76502AB4E20BC9 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+  3E05F2E826B95D74BA33D161 = { isa = PBXBuildFile; fileRef = 95F8A67ABA76502AB4E20BC9; };
+  6B482D0E494D5887BCCB6E1A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recipe.swift; sourceTree = "<group>"; };
+  F32D44B701375843AB64BC44 = { isa = PBXBuildFile; fileRef = 6B482D0E494D5887BCCB6E1A; };
+  0D1026338815596ABC5DF55A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleRecipes.swift; sourceTree = "<group>"; };
+  5A00D1A45B725E14AB153ABF = { isa = PBXBuildFile; fileRef = 0D1026338815596ABC5DF55A; };
+  2E9E39A5957F5A31B80352A9 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeStore.swift; sourceTree = "<group>"; };
+  00F39819E8795ACBA1068A0B = { isa = PBXBuildFile; fileRef = 2E9E39A5957F5A31B80352A9; };
+  EBD56A31054E5A6FB546E437 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeFeedView.swift; sourceTree = "<group>"; };
+  13AC9720875F539E90C52B4A = { isa = PBXBuildFile; fileRef = EBD56A31054E5A6FB546E437; };
+  5155DD85B7435900A0DC6E94 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeDetailView.swift; sourceTree = "<group>"; };
+  87B5C03106B15ABAA9AC5C0F = { isa = PBXBuildFile; fileRef = 5155DD85B7435900A0DC6E94; };
+  8B026514C8C55411AC63CF55 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeFormView.swift; sourceTree = "<group>"; };
+  A3E4C2EA177C59CEB7CA6A02 = { isa = PBXBuildFile; fileRef = 8B026514C8C55411AC63CF55; };
+  5C23F02F71C95978AE297DE0 = { isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RecipeExplorer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+  A98BFCF444A957C299F167B1 = { isa = PBXGroup; children = (0DBC7CD5B2F050169547FE45, 899A1F08845A5A3BB9C3E9B4, ); sourceTree = "<group>"; };
+  0DBC7CD5B2F050169547FE45 = { isa = PBXGroup; children = (45AF19B46DAD5417B3DA6FE7, 95F8A67ABA76502AB4E20BC9, 6B482D0E494D5887BCCB6E1A, 0D1026338815596ABC5DF55A, 2E9E39A5957F5A31B80352A9, EBD56A31054E5A6FB546E437, 5155DD85B7435900A0DC6E94, 8B026514C8C55411AC63CF55, ); path = RecipeExplorer; sourceTree = "<group>"; };
+  899A1F08845A5A3BB9C3E9B4 = { isa = PBXGroup; children = (5C23F02F71C95978AE297DE0, ); name = Products; sourceTree = "<group>"; };
+  750A8C239DC55F149754BE48 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (EA4705AB015957B584C3DCF4, 3E05F2E826B95D74BA33D161, F32D44B701375843AB64BC44, 5A00D1A45B725E14AB153ABF, 00F39819E8795ACBA1068A0B, 13AC9720875F539E90C52B4A, 87B5C03106B15ABAA9AC5C0F, A3E4C2EA177C59CEB7CA6A02, ); runOnlyForDeploymentPostprocessing = 0; };
+  DC5CBFF174F758F2BE42E5BB = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+  8BA6B953F77A5123BD65B20B = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+  066B4F8358FC546884474ED4 = { isa = PBXNativeTarget; buildConfigurationList = 397B0FE44DB357D3B46C280A; buildPhases = (750A8C239DC55F149754BE48, 8BA6B953F77A5123BD65B20B, DC5CBFF174F758F2BE42E5BB, ); buildRules = (); dependencies = (); name = RecipeExplorer; productName = RecipeExplorer; productReference = 5C23F02F71C95978AE297DE0; productType = "com.apple.product-type.application"; };
+  9424C51E335C526198A3F757 = { isa = PBXProject; attributes = { BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 1600; TargetAttributes = { 066B4F8358FC546884474ED4 = { CreatedOnToolsVersion = 16.0; }; }; }; buildConfigurationList = FE85BCAB9D8A5218AFD424A7; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base, ); mainGroup = A98BFCF444A957C299F167B1; productRefGroup = 899A1F08845A5A3BB9C3E9B4; projectDirPath = ""; projectRoot = ""; targets = (066B4F8358FC546884474ED4, ); };
+  E328D1BB528F59508B001F98 = { isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; IPHONEOS_DEPLOYMENT_TARGET = 17.0; }; name = Debug; };
+  9FFD3789CCDE5F74901D7E9F = { isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; IPHONEOS_DEPLOYMENT_TARGET = 17.0; }; name = Release; };
+  35C368A815F7571F945EEA72 = { isa = XCBuildConfiguration; buildSettings = { ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = edu.vt.RecipeExplorer; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+  F4F6510FB6415F54BF987158 = { isa = XCBuildConfiguration; buildSettings = { ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = edu.vt.RecipeExplorer; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+  FE85BCAB9D8A5218AFD424A7 = { isa = XCConfigurationList; buildConfigurations = (E328D1BB528F59508B001F98, 9FFD3789CCDE5F74901D7E9F, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+  397B0FE44DB357D3B46C280A = { isa = XCConfigurationList; buildConfigurations = (35C368A815F7571F945EEA72, F4F6510FB6415F54BF987158, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+ };
+ rootObject = 9424C51E335C526198A3F757;
+}
