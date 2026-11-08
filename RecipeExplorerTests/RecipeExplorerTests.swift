@@ -1,7 +1,8 @@
 import XCTest
 @testable import RecipeExplorer
 
-/// Tests for RecipeStore: adding, deleting, favorites, saving, and error cases.
+/// Tests for RecipeStore: adding, deleting, favorites, saving, error cases,
+/// grocery list management, checklist persistence, and user profiles.
 @MainActor
 final class RecipeStoreTests: XCTestCase {
     private var suiteName = ""
@@ -25,12 +26,12 @@ final class RecipeStoreTests: XCTestCase {
     private func makeRecipe(_ title: String = "Test Recipe") -> Recipe {
         Recipe(title: title, description: "desc", category: "Dinner", cuisine: "Test",
                prepTime: 5, cookTime: 10, servings: 2, difficulty: "Easy", rating: 0,
-               author: "Tester", imageURL: "", tags: [],
-               ingredients: [Ingredient(item: "Salt", amount: "1 tsp")],
-               instructions: ["Mix."], isUserCreated: true)
+               author: "Tester", imageURL: "", tags: ["Vegetarian", "Quick & Easy"],
+               ingredients: [Ingredient(item: "Salt", amount: "1 tsp"), Ingredient(item: "Pepper", amount: "1/2 tsp")],
+               instructions: ["Mix.", "Cook."], isUserCreated: true)
     }
 
-    // MARK: Ideal conditions (everything works normally)
+    // MARK: - Ideal conditions (everything works normally)
 
     // A brand-new install should show the built-in sample recipes with no error.
     func testFirstLaunchLoadsSampleRecipes() {
@@ -73,14 +74,14 @@ final class RecipeStoreTests: XCTestCase {
         XCTAssertFalse(store.recipes.contains { $0.id == r.id })
     }
 
-    // Reposting makes a new copy that is credited to "You" with a "Repost:" title.
+    // Reposting makes a new copy that is credited to the user with a "Repost:" title.
     func testRepostCreatesAttributedCopy() {
         let original = store.recipes[0]
         store.repost(original)
         let copy = store.recipes[0]
         XCTAssertNotEqual(copy.id, original.id)
         XCTAssertTrue(copy.title.hasPrefix("Repost: "))
-        XCTAssertEqual(copy.author, "You")
+        XCTAssertEqual(copy.author, store.userProfile.name)
     }
 
     // Liking twice should add one like, then remove it (not add two).
@@ -93,7 +94,73 @@ final class RecipeStoreTests: XCTestCase {
         XCTAssertEqual(store.recipes.first { $0.id == r.id }?.likes, 0)
     }
 
-    // MARK: Non-ideal conditions (bad input or broken data)
+    // Adding ingredients to grocery list creates attributed items.
+    func testAddIngredientsToGroceryList() {
+        let r = makeRecipe("Pancake Breakfast")
+        store.addIngredientsToGrocery(r.ingredients, from: r)
+        XCTAssertEqual(store.groceryList.count, 2)
+        XCTAssertEqual(store.groceryList.first?.recipeTitle, "Pancake Breakfast")
+        XCTAssertFalse(store.groceryList.first?.isPurchased ?? true)
+    }
+
+    // Toggling grocery item purchased state flips isPurchased.
+    func testToggleGroceryItemPurchased() {
+        store.addCustomGroceryItem(item: "Apples", amount: "3")
+        guard let item = store.groceryList.first else { return XCTFail("Missing item") }
+        store.toggleGroceryItemPurchased(item)
+        XCTAssertTrue(store.groceryList.first?.isPurchased ?? false)
+        guard let updated = store.groceryList.first else { return XCTFail("Missing item") }
+        store.toggleGroceryItemPurchased(updated)
+        XCTAssertFalse(store.groceryList.first?.isPurchased ?? true)
+    }
+
+    // Clearing purchased grocery items keeps unpurchased items.
+    func testClearPurchasedGroceryItems() {
+        store.addCustomGroceryItem(item: "Milk", amount: "1 gallon")
+        store.addCustomGroceryItem(item: "Bread", amount: "1 loaf")
+        guard let first = store.groceryList.first else { return XCTFail("Missing item") }
+        store.toggleGroceryItemPurchased(first)
+        store.clearPurchasedGroceryItems()
+        XCTAssertEqual(store.groceryList.count, 1)
+        XCTAssertEqual(store.groceryList.first?.item, "Bread")
+    }
+
+    // Grocery list persists across app relaunches.
+    func testGroceryListPersistsAcrossLaunches() {
+        store.addCustomGroceryItem(item: "Olive Oil", amount: "500ml")
+        let relaunched = RecipeStore(defaults: defaults)
+        XCTAssertEqual(relaunched.groceryList.count, 1)
+        XCTAssertEqual(relaunched.groceryList.first?.item, "Olive Oil")
+    }
+
+    // Ingredient checklist states persist per recipe across sessions.
+    func testIngredientChecklistPersistence() {
+        let r = makeRecipe("Pasta Carbonara")
+        store.add(r)
+        let ingID = r.ingredients[0].id
+        XCTAssertFalse(store.isIngredientChecked(recipeID: r.id, ingredientID: ingID))
+        store.toggleIngredientChecked(recipeID: r.id, ingredientID: ingID)
+        XCTAssertTrue(store.isIngredientChecked(recipeID: r.id, ingredientID: ingID))
+        
+        // Simulates app relaunch
+        let relaunched = RecipeStore(defaults: defaults)
+        XCTAssertTrue(relaunched.isIngredientChecked(recipeID: r.id, ingredientID: ingID))
+        
+        // Clear checklist
+        store.clearCheckedIngredients(recipeID: r.id)
+        XCTAssertFalse(store.isIngredientChecked(recipeID: r.id, ingredientID: ingID))
+    }
+
+    // User profile updates persist across relaunches.
+    func testUserProfilePersistsAcrossLaunches() {
+        store.updateProfile(name: "Executive Chef", bio: "Cooking delicious food", dietaryPreferences: ["Vegan", "Gluten-Free"])
+        let relaunched = RecipeStore(defaults: defaults)
+        XCTAssertEqual(relaunched.userProfile.name, "Executive Chef")
+        XCTAssertEqual(relaunched.userProfile.bio, "Cooking delicious food")
+        XCTAssertEqual(relaunched.userProfile.dietaryPreferences, ["Vegan", "Gluten-Free"])
+    }
+
+    // MARK: - Non-ideal conditions (bad input or broken data)
 
     // The built-in sample recipes must not be deletable.
     func testSampleRecipesCannotBeDeleted() {
@@ -113,12 +180,34 @@ final class RecipeStoreTests: XCTestCase {
         XCTAssertEqual(store.recipes.first { $0.id == r.id }?.userRating, 1)
     }
 
-    // If saved data is garbage, the app should fall back to the samples
-    // and report an error instead of crashing or silently ignoring it.
+    // Reject adding empty or whitespace custom grocery items.
+    func testBlankCustomGroceryItemIsRejected() {
+        let addedEmpty = store.addCustomGroceryItem(item: "", amount: "1")
+        let addedWhitespace = store.addCustomGroceryItem(item: "   ", amount: "1")
+        XCTAssertFalse(addedEmpty)
+        XCTAssertFalse(addedWhitespace)
+        XCTAssertEqual(store.groceryList.count, 0)
+    }
+
+    // Whitespace profile name defaults cleanly to Chef Ahmad.
+    func testBlankProfileNameDefaultsCleanly() {
+        store.updateProfile(name: "   ", bio: "Bio", dietaryPreferences: [])
+        XCTAssertEqual(store.userProfile.name, "Chef Ahmad")
+    }
+
+    // If saved recipe data is garbage, the app falls back to samples and reports an error.
     func testCorruptedSavedRecipesFallBackToSamplesAndReportError() {
         defaults.set(Data("not json".utf8), forKey: RecipeStore.recipesKey)
         let broken = RecipeStore(defaults: defaults)
         XCTAssertEqual(broken.recipes.count, SampleRecipes.all.count)
+        XCTAssertNotNil(broken.storageError)
+    }
+
+    // If saved grocery data is corrupted, resets cleanly and reports error.
+    func testCorruptedSavedGroceryFallsBackAndReportsError() {
+        defaults.set(Data("invalid grocery binary".utf8), forKey: RecipeStore.groceryKey)
+        let broken = RecipeStore(defaults: defaults)
+        XCTAssertEqual(broken.groceryList.count, 0)
         XCTAssertNotNil(broken.storageError)
     }
 }

@@ -103,7 +103,7 @@ struct RecipeFormView: View {
             cuisine: cuisine.isEmpty ? "Homemade" : cuisine,
             prepTime: prep, cookTime: cook, servings: servings,
             difficulty: existing?.difficulty ?? "Easy", rating: existing?.rating ?? 0,
-            author: existing?.author ?? "You",
+            author: existing?.author ?? (store.userProfile.name.isEmpty ? "Chef Ahmad" : store.userProfile.name),
             imageURL: imageURL.trimmingCharacters(in: .whitespacesAndNewlines),
             tags: existing?.tags ?? [], ingredients: ingredients, instructions: instructions,
             isUserCreated: true, likes: existing?.likes ?? 0, dislikes: existing?.dislikes ?? 0,

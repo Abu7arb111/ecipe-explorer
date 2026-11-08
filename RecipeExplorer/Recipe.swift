@@ -6,6 +6,20 @@ struct Ingredient: Codable, Hashable, Identifiable {
     var amount: String
 }
 
+struct GroceryItem: Identifiable, Codable, Hashable {
+    var id: UUID = UUID()
+    var item: String
+    var amount: String
+    var recipeTitle: String? = nil
+    var isPurchased: Bool = false
+}
+
+struct UserProfile: Codable, Hashable {
+    var name: String = "Chef Ahmad"
+    var bio: String = "Passionate home cook exploring new culinary horizons."
+    var dietaryPreferences: [String] = []
+}
+
 struct Recipe: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var title: String

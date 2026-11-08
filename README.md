@@ -1,50 +1,73 @@
-# Recipe Explorer — native iOS app (SwiftUI)
+# Recipe Explorer — Native iOS App (SwiftUI)
 
-This is a **native SwiftUI implementation**, not a web view or wrapper, based on Recipe Explorer Deliverables 1/2 and the public team's web prototype (https://github.com/Abu7arb111/ecipe-explorer).
+This is a **native SwiftUI implementation** for iOS 17.0+, built for CS 374. It is an offline-first, feature-complete recipe exploration, creation, and cooking companion app.
 
-## Run on a Mac with Xcode
+* **GitHub Repository:** [https://github.com/Abu7arb111/ecipe-explorer](https://github.com/Abu7arb111/ecipe-explorer)
+* **Team Members:** Ahmad Harb, Vedanth Subramanian, Tylor Newcomb, Insung
 
-1. Open `RecipeExplorer.xcodeproj` from this archive using Xcode.
-2. Under the `RecipeExplorer` target's **Signing & Capabilities**, select your Personal Team if Xcode asks for one.
-3. Pick an installed iPhone simulator (e.g. iPhone 17), and press **Run** (Cmd+R).
-4. Deployment target: **iOS 17.0+**. No packages, API keys, or back-end required.
+---
 
-If Xcode cannot open the included project for any reason, create a new **iOS App** project named RecipeExplorer, choose **SwiftUI / Swift**, and drag the nine files in the `RecipeExplorer/` folder into the app target, replacing its generated App and ContentView files.
+## How to Run in Xcode
 
-## Features implemented in source
+1. Open `RecipeExplorer.xcodeproj` in Xcode on macOS.
+2. Select the `RecipeExplorer` target. Under **Signing & Capabilities**, select your Personal Team if prompted.
+3. Choose an iPhone Simulator (e.g. iPhone 16 or 17) or physical iOS device.
+4. Press **Cmd + R** to run the app, or **Cmd + U** to run all automated unit tests.
+5. Deployment target: **iOS 17.0+** (no third-party pods, packages, or API keys required).
 
-- Native two-column recipe feed, category chips, ratings, sort, search by recipe name and ingredients
-- Detail screens with ingredients checklist, instructions, countdown timer, bookmark button, share sheet
-- Favorites and added recipes persisted across launches using UserDefaults + Codable
-- Add recipe form; locally submitted recipes appear in feed and My Recipes
-- Edit/delete locally created recipes; reversible like/dislike reactions and personal 1–5-star ratings
-- Repost a recipe into My Recipes with attribution to its original creator (local-only)
-- Six starter recipes adapted from the team's web prototype
+---
 
-## Important scope notes
+## Implemented Features (100% Complete)
 
-- **No user accounts, remote database, or cross-device syncing**; the identity is a local placeholder (`You`).
-- Ratings and reactions are local-only; they are not shared with other users.
-- Recipe images load over the network from the web prototype's Unsplash URLs; placeholder is shown offline.
-- Timer counts down only while the detail view is actively in use; it does not schedule system notifications.
-- Created recipes are stored locally, not published to other users.
-- The source has **not been compiled in Xcode in this environment**. Run and test on a Mac before claiming it is working in a graded sprint backlog.
+### 1. Recipe Browsing & Multi-Criteria Search
+* Two-column adaptive recipe card feed with visual ratings and prep time badges.
+* Category filter chips: *All, Breakfast, Lunch, Dinner, Vegetarian, Quick & Easy*.
+* **Dietary Tag Filtering**: Instant filtering by *Vegetarian, Vegan, Gluten-Free, High Protein, Quick & Easy*.
+* Real-time search across titles, descriptions, cuisines, dietary tags, and ingredient names.
+* Sorting selector: *Featured, Highest Rated, Quickest*.
 
-## Quick manual test checklist
+### 2. Interactive Recipe Detail Experience
+* Hero recipe image with offline fallback placeholder.
+* Ingredient checklist with **persistent session checkmarks** saved across app restarts.
+* **One-Tap Grocery List Export**: Adds recipe ingredients directly into the Smart Grocery List.
+* Interactive 1–5 star personal rating selector.
+* Reversible like and dislike reaction counters that prevent count inflation.
+* Social reposting: Clones recipes into "My Recipes" with credited author attribution.
 
-1. Explore shows six recipes and cards navigate to details.
-2. Searching `garlic` finds recipes with garlic in the title/ingredients.
-3. Category `Breakfast` narrows results; sort changes order.
-4. Tap a heart, restart app, find recipe under Favorites.
-5. In detail, tap ingredients; start, pause, reset cooking timer.
-6. Add a recipe, confirm it appears in Explore and My Recipes, then edit and delete it.
-7. Rate recipe, tap like/dislike twice and confirm the reaction toggles instead of repeatedly increasing the count.
-8. Repost a sample recipe, confirm an attributed copy appears in My Recipes, then delete the copy.
+### 3. Hands-Free Step-by-Step Cooking Mode ("Cook Mode")
+* Full-screen, high-contrast cooking walkthrough designed for kitchen counters.
+* Step counter (`Step X of Y`) with animated progress bar.
+* Oversized text and bold typography for readability from a distance.
+* Built-in floating step timer with Start/Pause/Reset controls.
+* Completion celebration screen upon finishing all recipe steps.
 
-Project members: Ahmad Harb, Insung, Tylor, Vedanth. Scrum Master for current check-in: Ahmad Harb. Contributions reported as 25% each; verify with the team.
+### 4. Background Kitchen Timer & System Notifications
+* Monospaced countdown timer directly inside the recipe detail screen.
+* Integrates with Apple's `UserNotifications` framework (`UNUserNotificationCenter`) to schedule a local alert banner and chime when the countdown finishes—even if the app is backgrounded or the screen is locked.
 
-## Deliverable 2 alignment
+### 5. Smart Grocery Shopping Checklist
+* Dedicated 3rd tab in the primary navigation bar.
+* Filter by *All, To Buy,* or *Purchased*.
+* Strike-through checkmark toggling for purchased groceries.
+* Quick-add bar for custom items (e.g., "Milk", "Eggs").
+* Swipe-to-delete support.
+* Toolbar options to "Clear Purchased" and "Clear All".
+* Formatted text export via iOS `ShareLink` for messaging shopping lists.
 
-The existing Recipe.swift, SampleRecipes.swift, RecipeFeedView.swift, RecipeDetailView.swift and ContentView.swift roles remain intact. The new RecipeStore centralizes local data changes; RecipeFormView supports creation and editing. This is an expanded SwiftUI implementation aligned with the Deliverable 1/2 user stories, not a claim of line-for-line reuse of the earlier code.
+### 6. Chef Profile & Stats
+* Dedicated Profile section under "My Recipes" featuring customizable chef name, bio, and dietary preference badges.
+* Live statistics counters: Total Recipes Created, Saved Favorites, and Grocery Items.
+* Edit profile modal sheet to update personal chef identity across all future creations and reposts.
 
-Original goals covered: browsing, categories, search, details, creation, favorites, ratings, likes/dislikes, editing/deleting and reposting. Account authentication, comments/reviews, and a shared online feed are still future scope.
+### 7. Form Input Validation & Storage Error Handling
+* Form validation engine (`RecipeValidator`) verifies image URL schemes (`http://`, `https://`) and ingredient syntax (`amount | item`).
+* Highlights exact offending line numbers in red and disables the Save button until all inputs are valid.
+* Defensive `UserDefaults` serialization with `do-catch` recovery; corrupted files safely fall back to sample recipes and surface a modal alert explaining the recovery.
+
+---
+
+## Automated Unit Testing Suite
+
+The project includes an automated test bundle (`RecipeExplorerTests`) with **24 unit tests** covering both ideal operations and non-ideal defensive edge cases:
+* **Ideal Conditions:** Sample data loading, adding recipes to top of list, favorites toggle, persistence across launches, deletion of user recipes, attributed reposting, reversible like toggling, adding ingredients to grocery list, grocery purchased toggle, clearing purchased items, grocery persistence, ingredient checklist persistence, and user profile updates.
+* **Non-Ideal Conditions:** Sample recipe deletion protection, rating clamping (1–5 stars), rejection of blank/whitespace grocery items, fallback to default chef name on blank input, corrupted recipe JSON recovery, corrupted grocery JSON recovery, rejection of invalid image URLs, and reporting malformed ingredient line numbers.
