@@ -1,50 +1,93 @@
 import Foundation
 import Combine
 
+/// Holds all recipes and favorites, and saves them to the phone's storage (UserDefaults).
 @MainActor final class RecipeStore: ObservableObject {
+    // Keys used to save and load data. Public so the tests can use them too.
+    static let recipesKey = "recipeExplorer.recipes.v1"
+    static let favoritesKey = "recipeExplorer.favorites.v1"
+
     @Published private(set) var recipes: [Recipe] = []
     @Published private(set) var favorites: Set<UUID> = []
-    private let recipesKey = "recipeExplorer.recipes.v1"
-    private let favoritesKey = "recipeExplorer.favorites.v1"
+    // If this is set, ContentView shows an alert with the message.
+    @Published var storageError: String? = nil
 
-    init() {
-        if let data = UserDefaults.standard.data(forKey: recipesKey),
-           let saved = try? JSONDecoder().decode([Recipe].self, from: data) {
-            recipes = saved
-        } else { recipes = SampleRecipes.all }
-        if let data = UserDefaults.standard.data(forKey: favoritesKey),
-           let saved = try? JSONDecoder().decode(Set<UUID>.self, from: data) { favorites = saved }
+    private let defaults: UserDefaults
+
+    // The default is the real app storage. Tests pass in a temporary one instead.
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+
+        // Load saved recipes. If the saved data is corrupted, fall back to the
+        // sample recipes and tell the user instead of failing silently.
+        if let data = defaults.data(forKey: Self.recipesKey) {
+            do {
+                recipes = try JSONDecoder().decode([Recipe].self, from: data)
+            } catch {
+                recipes = SampleRecipes.all
+                storageError = "Your saved recipes couldn't be read, so the sample recipes were loaded instead."
+            }
+        } else {
+            // First launch: nothing saved yet, so start with the samples.
+            recipes = SampleRecipes.all
+        }
+
+        // Load saved favorites. If corrupted, reset them and tell the user
+        // (unless we already have an error message from the recipes above).
+        if let data = defaults.data(forKey: Self.favoritesKey) {
+            do {
+                favorites = try JSONDecoder().decode(Set<UUID>.self, from: data)
+            } catch {
+                favorites = []
+                if storageError == nil {
+                    storageError = "Your saved favorites couldn't be read and were reset."
+                }
+            }
+        }
     }
 
     func isFavorite(_ recipe: Recipe) -> Bool { favorites.contains(recipe.id) }
+
+    // Adds the recipe to favorites, or removes it if it's already there.
     func toggleFavorite(_ recipe: Recipe) {
         if !favorites.insert(recipe.id).inserted { favorites.remove(recipe.id) }
         save()
     }
+
+    // New recipes go to the top of the list.
     func add(_ recipe: Recipe) { recipes.insert(recipe, at: 0); save() }
+
+    // Replaces an existing recipe (matched by id). Does nothing if it isn't found.
     func update(_ recipe: Recipe) {
         guard let index = recipes.firstIndex(where: { $0.id == recipe.id }) else { return }
         recipes[index] = recipe; save()
     }
+
+    // Only recipes the user created can be deleted, not the built-in samples.
     func delete(_ recipe: Recipe) {
         guard recipe.isUserCreated else { return }
         recipes.removeAll { $0.id == recipe.id }
         favorites.remove(recipe.id)
         save()
     }
-    // A reaction can be selected, changed, or removed without inflating counts.
+
+    // Like/dislike toggles: tapping the same button again removes the reaction,
+    // and switching from like to dislike moves the count over.
     func react(to recipe: Recipe, like: Bool) {
         guard var updated = recipes.first(where: { $0.id == recipe.id }) else { return }
         let requested = like ? "like" : "dislike"
+        // First undo the previous reaction (if any)...
         if updated.userReaction == "like" { updated.likes = max(0, updated.likes - 1) }
         if updated.userReaction == "dislike" { updated.dislikes = max(0, updated.dislikes - 1) }
+        // ...then either clear it (same button tapped twice) or set the new one.
         updated.userReaction = updated.userReaction == requested ? nil : requested
         if updated.userReaction == "like" { updated.likes += 1 }
         if updated.userReaction == "dislike" { updated.dislikes += 1 }
         update(updated)
     }
-    // A local repost is a new user-created recipe with clear attribution.
-    // The original recipe remains unchanged and can still be found in Explore.
+
+    // Makes a copy of a recipe in My Recipes, credited to the original author.
+    // The original stays unchanged.
     func repost(_ recipe: Recipe) {
         guard recipes.contains(where: { $0.id == recipe.id }) else { return }
         var copy = recipe
@@ -54,19 +97,29 @@ import Combine
         copy.author = "You"
         copy.isUserCreated = true
         copy.ingredients = recipe.ingredients.map { Ingredient(item: $0.item, amount: $0.amount) }
+        // The copy starts fresh: no likes, dislikes, or personal rating.
         copy.likes = 0
         copy.dislikes = 0
         copy.userReaction = nil
         copy.userRating = nil
         add(copy)
     }
+
+    // Saves the user's star rating, always kept between 1 and 5.
     func rate(_ recipe: Recipe, stars: Int) {
         guard var updated = recipes.first(where: { $0.id == recipe.id }) else { return }
-        updated.userRating = stars
+        updated.userRating = min(5, max(1, stars))
         update(updated)
     }
+
+    // Writes recipes and favorites to storage. If encoding fails, show an alert
+    // instead of silently losing the user's changes.
     private func save() {
-        if let data = try? JSONEncoder().encode(recipes) { UserDefaults.standard.set(data, forKey: recipesKey) }
-        if let data = try? JSONEncoder().encode(favorites) { UserDefaults.standard.set(data, forKey: favoritesKey) }
+        do {
+            defaults.set(try JSONEncoder().encode(recipes), forKey: Self.recipesKey)
+            defaults.set(try JSONEncoder().encode(favorites), forKey: Self.favoritesKey)
+        } catch {
+            storageError = "Your changes couldn't be saved. They may be lost when the app closes."
+        }
     }
 }

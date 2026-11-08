@@ -27,5 +27,16 @@ struct ContentView: View {
                 .padding(.trailing, 22).padding(.bottom, 75)
         }
         .sheet(isPresented: $showingNew) { NavigationStack { RecipeFormView(existing: nil) } }
+        
+        // Shows a popup whenever the store reports a storage problem
+        // (corrupted saved data or a failed save). Tapping OK clears the message.
+        .alert("Storage problem", isPresented: Binding(
+            get: { store.storageError != nil },
+            set: { if !$0 { store.storageError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(store.storageError ?? "")
+        }
     }
 }
