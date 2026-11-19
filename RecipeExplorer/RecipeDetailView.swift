@@ -16,9 +16,17 @@ struct RecipeDetailView: View {
     @State private var secondsLeft: Int = 0
     @State private var running = false
     @State private var timerMessage = false
-    
+    @State private var showingPublishConfirmation = false
+    @State private var showingUnpublishConfirmation = false
+    @State private var communityBusy = false
+    @State private var communityError: String? = nil
+
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    private var recipe: Recipe? { store.recipes.first { $0.id == recipeID } }
+    // Works for recipes in My Recipes and for recipes from the community feed.
+    private var recipe: Recipe? { store.recipe(withID: recipeID) }
+    // Someone else's (or your) published recipe that isn't stored in My Recipes on this device.
+    // Personal features that only apply to local recipes (favorite, reactions, rating) are hidden.
+    private var isCommunityOnly: Bool { !store.recipes.contains { $0.id == recipeID } }
 
     var body: some View {
         Group {
@@ -36,13 +44,15 @@ struct RecipeDetailView: View {
                                     Text("By \(recipe.author) • \(recipe.cuisine)").foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                Button {
-                                    store.toggleFavorite(recipe)
-                                } label: {
-                                    Image(systemName: store.isFavorite(recipe) ? "heart.fill" : "heart")
-                                        .font(.title2)
-                                        .foregroundStyle(store.isFavorite(recipe) ? .red : .orange)
-                                }.accessibilityLabel("Toggle favorite")
+                                if !isCommunityOnly {
+                                    Button {
+                                        store.toggleFavorite(recipe)
+                                    } label: {
+                                        Image(systemName: store.isFavorite(recipe) ? "heart.fill" : "heart")
+                                            .font(.title2)
+                                            .foregroundStyle(store.isFavorite(recipe) ? .red : .orange)
+                                    }.accessibilityLabel("Toggle favorite")
+                                }
                             }
 
                             // Tags row
@@ -169,18 +179,20 @@ struct RecipeDetailView: View {
 
                             // Engagement: Likes, Dislikes, Share, Repost
                             HStack {
-                                Button {
-                                    store.react(to: recipe, like: true)
-                                } label: {
-                                    Label("\(recipe.likes)", systemImage: recipe.userReaction == "like" ? "hand.thumbsup.fill" : "hand.thumbsup")
+                                if !isCommunityOnly {
+                                    Button {
+                                        store.react(to: recipe, like: true)
+                                    } label: {
+                                        Label("\(recipe.likes)", systemImage: recipe.userReaction == "like" ? "hand.thumbsup.fill" : "hand.thumbsup")
+                                    }
+                                    Spacer()
+                                    Button {
+                                        store.react(to: recipe, like: false)
+                                    } label: {
+                                        Label("\(recipe.dislikes)", systemImage: recipe.userReaction == "dislike" ? "hand.thumbsdown.fill" : "hand.thumbsdown")
+                                    }
+                                    Spacer()
                                 }
-                                Spacer()
-                                Button {
-                                    store.react(to: recipe, like: false)
-                                } label: {
-                                    Label("\(recipe.dislikes)", systemImage: recipe.userReaction == "dislike" ? "hand.thumbsdown.fill" : "hand.thumbsdown")
-                                }
-                                Spacer()
                                 ShareLink(item: "Try \(recipe.title) on Recipe Explorer!") {
                                     Label("Share", systemImage: "square.and.arrow.up")
                                 }
@@ -189,32 +201,29 @@ struct RecipeDetailView: View {
                             Button {
                                 showingRepostConfirmation = true
                             } label: {
-                                Label("Repost to My Recipes", systemImage: "arrow.2.squarepath")
+                                Label(isCommunityOnly ? "Save a Copy to My Recipes" : "Repost to My Recipes",
+                                      systemImage: "arrow.2.squarepath")
                             }
                             .buttonStyle(.bordered)
 
-                            // 5-Star Rating
-                            Text("Your rating").font(.headline)
-                            HStack(spacing: 12) {
-                                ForEach(1...5, id: \.self) { star in
-                                    Button {
-                                        store.rate(recipe, stars: star)
-                                    } label: {
-                                        Image(systemName: star <= (recipe.userRating ?? 0) ? "star.fill" : "star")
-                                            .font(.title2)
-                                            .foregroundStyle(.orange)
-                                    }.accessibilityLabel("Rate \(star) stars")
+                            // 5-Star Rating (personal, so only for recipes stored on this device)
+                            if !isCommunityOnly {
+                                Text("Your rating").font(.headline)
+                                HStack(spacing: 12) {
+                                    ForEach(1...5, id: \.self) { star in
+                                        Button {
+                                            store.rate(recipe, stars: star)
+                                        } label: {
+                                            Image(systemName: star <= (recipe.userRating ?? 0) ? "star.fill" : "star")
+                                                .font(.title2)
+                                                .foregroundStyle(.orange)
+                                        }.accessibilityLabel("Rate \(star) stars")
+                                    }
                                 }
                             }
 
-                            // Edit / Delete for user-created recipes
-                            if recipe.isUserCreated {
-                                HStack {
-                                    Button("Edit Recipe") { showingEdit = true }
-                                    Spacer()
-                                    Button("Delete Recipe", role: .destructive) { showingDelete = true }
-                                }.padding(.top)
-                            }
+                            // Publish / unpublish / edit / delete, or who owns it
+                            communityControls(for: recipe)
                         }
                         .padding(.horizontal)
                         .padding(.bottom, 30)
@@ -226,9 +235,6 @@ struct RecipeDetailView: View {
                     NavigationStack {
                         CookingModeView(recipe: recipe)
                     }
-                }
-                .confirmationDialog("Delete this recipe?", isPresented: $showingDelete) {
-                    Button("Delete", role: .destructive) { store.delete(recipe); dismiss() }
                 }
                 .confirmationDialog("Repost this recipe?", isPresented: $showingRepostConfirmation) {
                     Button("Repost") { store.repost(recipe); showingRepostSuccess = true }
@@ -253,6 +259,127 @@ struct RecipeDetailView: View {
                 }
             } else {
                 ContentUnavailableView("Recipe unavailable", systemImage: "exclamationmark.triangle")
+            }
+        }
+    }
+
+    // Everything about sharing and ownership. Kept out of `body` so the compiler
+    // doesn't have to type-check one enormous expression.
+    private func communityControls(for recipe: Recipe) -> some View {
+        VStack(alignment: .leading, spacing: 17) {
+            communitySection(for: recipe)
+
+            // Edit / Delete: only the recipe's author sees these
+            if store.canModify(recipe) {
+                HStack {
+                    Button("Edit Recipe") { showingEdit = true }
+                    Spacer()
+                    Button(isCommunityOnly ? "Delete from Community" : "Delete Recipe", role: .destructive) {
+                        showingDelete = true
+                    }
+                }
+                .padding(.top)
+                .disabled(communityBusy)
+            }
+        }
+        .confirmationDialog("Delete this recipe?", isPresented: $showingDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                runCommunityAction(dismissOnSuccess: true) { try await store.deleteEverywhere(recipe) }
+            }
+        } message: {
+            if store.isPublished(recipe) {
+                Text("It will also be removed from the community feed for everyone.")
+            }
+        }
+        .confirmationDialog("Publish this recipe?", isPresented: $showingPublishConfirmation, titleVisibility: .visible) {
+            Button("Publish") {
+                runCommunityAction { try await store.publish(recipe) }
+            }
+        } message: {
+            Text("Other users will be able to browse it in the Community tab. Only you can edit, unpublish, or delete it.")
+        }
+        .confirmationDialog("Unpublish this recipe?", isPresented: $showingUnpublishConfirmation, titleVisibility: .visible) {
+            Button("Unpublish", role: .destructive) {
+                runCommunityAction { try await store.unpublish(recipe) }
+            }
+        } message: {
+            Text("It will be removed from the community feed but stay in My Recipes.")
+        }
+        .alert("Community", isPresented: Binding(
+            get: { communityError != nil },
+            set: { if !$0 { communityError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(communityError ?? "")
+        }
+    }
+
+    // Publishing controls for the author; an ownership note for everyone else.
+    @ViewBuilder
+    private func communitySection(for recipe: Recipe) -> some View {
+        let isOwner = store.canModify(recipe)
+        let isPublished = store.isPublished(recipe)
+        if isOwner || isPublished {
+            Divider()
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Community").font(.title2.bold())
+                if isPublished {
+                    Label(publishedDescription(for: recipe), systemImage: "globe")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.green)
+                }
+                if isOwner {
+                    if !isPublished {
+                        Text("Only you can see this recipe. Publish it so other users can browse it.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        Button {
+                            showingPublishConfirmation = true
+                        } label: {
+                            Label("Publish to Community", systemImage: "globe")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.orange)
+                    } else if !isCommunityOnly {
+                        Button {
+                            showingUnpublishConfirmation = true
+                        } label: {
+                            Label("Unpublish", systemImage: "eye.slash")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    if communityBusy {
+                        ProgressView("Updating community feed…").font(.footnote)
+                    }
+                } else {
+                    Label("Shared by \(recipe.author). Only the author can edit or delete it.", systemImage: "lock")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .disabled(communityBusy)
+        }
+    }
+
+    private func publishedDescription(for recipe: Recipe) -> String {
+        guard let date = recipe.publishedAt else { return "Published to the community" }
+        return "Published \(date.formatted(date: .abbreviated, time: .omitted))"
+    }
+
+    // Runs a publish/unpublish/delete call, showing progress and any error.
+    @MainActor
+    private func runCommunityAction(dismissOnSuccess: Bool = false,
+                                    _ action: @escaping @MainActor () async throws -> Void) {
+        guard !communityBusy else { return }
+        communityBusy = true
+        Task { @MainActor in
+            defer { communityBusy = false }
+            do {
+                try await action()
+                if dismissOnSuccess { dismiss() }
+            } catch {
+                communityError = error.localizedDescription
             }
         }
     }

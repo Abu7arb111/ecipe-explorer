@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Merged with the Info.plist Xcode generates. Lets the app reach the
+	     community server over plain HTTP on localhost / your local network
+	     (e.g. http://127.0.0.1:8080) while keeping ATS on for the internet. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Recipe Explorer connects to a community recipe server on your local network to share published recipes.</string>
+</dict>
+</plist>

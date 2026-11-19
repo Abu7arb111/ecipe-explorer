@@ -16,6 +16,8 @@ struct RecipeFormView: View {
     @State private var prep = 10
     @State private var cook = 20
     @State private var servings = 2
+    @State private var isSaving = false
+    @State private var saveError: String? = nil
     private let categories = ["Breakfast", "Lunch", "Dinner", "Vegetarian", "Quick & Easy"]
 
     // Error message for the image URL field, or nil if it's fine.
@@ -73,10 +75,23 @@ struct RecipeFormView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") { save() }.disabled(!valid)
+                if isSaving {
+                    ProgressView()
+                } else {
+                    Button("Save") { save() }.disabled(!valid)
+                }
             }
         }
         .onAppear(perform: populate)
+        .interactiveDismissDisabled(isSaving)
+        .alert("Couldn't save changes", isPresented: Binding(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(saveError ?? "")
+        }
     }
 
     // When editing, fill the form with the recipe's current values.
@@ -92,7 +107,7 @@ struct RecipeFormView: View {
     // Builds a Recipe from the form and adds it (new) or updates it (editing).
     private func save() {
         // Safety check in case Save is triggered while the form is invalid.
-        guard valid else { return }
+        guard valid, !isSaving else { return }
         let ingredients = RecipeValidator.parseIngredients(ingredientsText)
         let instructions = RecipeValidator.parseInstructions(instructionsText)
         guard !ingredients.isEmpty && !instructions.isEmpty else { return }
@@ -107,8 +122,25 @@ struct RecipeFormView: View {
             imageURL: imageURL.trimmingCharacters(in: .whitespacesAndNewlines),
             tags: existing?.tags ?? [], ingredients: ingredients, instructions: instructions,
             isUserCreated: true, likes: existing?.likes ?? 0, dislikes: existing?.dislikes ?? 0,
-            userRating: existing?.userRating, userReaction: existing?.userReaction)
-        if existing == nil { store.add(newRecipe) } else { store.update(newRecipe) }
-        dismiss()
+            userRating: existing?.userRating, userReaction: existing?.userReaction,
+            authorID: existing?.authorID ?? store.authorID, publishedAt: existing?.publishedAt)
+
+        guard existing != nil else {
+            store.add(newRecipe)
+            dismiss()
+            return
+        }
+        // Edits go through the store so only the author can save them and the
+        // community copy is updated too when the recipe is published.
+        isSaving = true
+        Task { @MainActor in
+            defer { isSaving = false }
+            do {
+                try await store.saveEdits(newRecipe)
+                dismiss()
+            } catch {
+                saveError = error.localizedDescription
+            }
+        }
     }
 }

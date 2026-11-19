@@ -18,13 +18,19 @@ struct ContentView: View {
             }
             .tabItem { Label("Favorites", systemImage: "heart.fill") }
 
-            // 3. Smart Grocery List Tab
+            // 3. Community Tab: recipes published by all users
+            NavigationStack {
+                CommunityFeedView()
+            }
+            .tabItem { Label("Community", systemImage: "person.3.fill") }
+
+            // 4. Smart Grocery List Tab
             NavigationStack {
                 GroceryListView()
             }
             .tabItem { Label("Grocery", systemImage: "cart.fill") }
 
-            // 4. Chef Profile & My Recipes Tab
+            // 5. Chef Profile & My Recipes Tab
             NavigationStack {
                 MyRecipesProfileView()
             }
@@ -266,6 +272,8 @@ struct MyRecipesProfileView: View {
                     HStack {
                         statPill(label: "Recipes", value: "\(store.recipes.filter(\.isUserCreated).count)")
                         Spacer()
+                        statPill(label: "Published", value: "\(store.publishedCount)")
+                        Spacer()
                         statPill(label: "Favorites", value: "\(store.favorites.count)")
                         Spacer()
                         statPill(label: "Grocery Items", value: "\(store.groceryList.count)")
@@ -290,7 +298,7 @@ struct MyRecipesProfileView: View {
                     ContentUnavailableView(
                         "No recipes yet",
                         systemImage: "square.and.pencil",
-                        description: Text("Create a recipe using the + button or repost an existing one.")
+                        description: Text("Create a recipe using the + button or repost an existing one. Open a recipe to publish it to the Community tab.")
                     )
                     .padding(.vertical, 20)
                 } else {
@@ -305,6 +313,11 @@ struct MyRecipesProfileView: View {
                                     Text(recipe.category)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+                                    if recipe.isPublished {
+                                        Label("Published", systemImage: "globe")
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundStyle(.green)
+                                    }
                                     Spacer()
                                     Label("\(recipe.likes)", systemImage: "hand.thumbsup.fill")
                                         .font(.caption2)

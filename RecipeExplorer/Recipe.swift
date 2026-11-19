@@ -20,6 +20,19 @@ struct UserProfile: Codable, Hashable {
     var dietaryPreferences: [String] = []
 }
 
+/// The identity this install uses when publishing. The ID is public (it is stored
+/// on every recipe the user publishes); the token is a private secret the server
+/// uses to confirm that edit/delete requests really come from that author.
+struct AuthorIdentity: Codable, Hashable, Sendable {
+    var id: UUID
+    var token: String
+
+    static func generate() -> AuthorIdentity {
+        // Two random UUIDs give ~244 bits of randomness for the secret.
+        AuthorIdentity(id: UUID(), token: UUID().uuidString + UUID().uuidString)
+    }
+}
+
 struct Recipe: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var title: String
@@ -42,13 +55,22 @@ struct Recipe: Identifiable, Codable, Hashable {
     var userRating: Int? = nil
     // Optional for compatibility with recipes saved before reactions were tracked.
     var userReaction: String? = nil
+    // Stable ID of the user who owns this recipe. Only that user may edit or
+    // delete it once it is published. nil for built-in samples.
+    var authorID: UUID? = nil
+    // When the recipe was published to the community feed; nil = private to this device.
+    var publishedAt: Date? = nil
+
+    var isPublished: Bool { publishedAt != nil }
+
     // Explicit initializer keeps recipe creation simple in the views and sample data.
     init(id: UUID = UUID(), title: String, description: String, category: String,
          cuisine: String, prepTime: Int, cookTime: Int, servings: Int,
          difficulty: String, rating: Double, author: String, imageURL: String,
          tags: [String], ingredients: [Ingredient], instructions: [String],
          isUserCreated: Bool = false, likes: Int = 0, dislikes: Int = 0,
-         userRating: Int? = nil, userReaction: String? = nil) {
+         userRating: Int? = nil, userReaction: String? = nil,
+         authorID: UUID? = nil, publishedAt: Date? = nil) {
         self.id = id; self.title = title; self.description = description
         self.category = category; self.cuisine = cuisine
         self.prepTime = prepTime; self.cookTime = cookTime; self.servings = servings
@@ -57,12 +79,14 @@ struct Recipe: Identifiable, Codable, Hashable {
         self.instructions = instructions; self.isUserCreated = isUserCreated
         self.likes = likes; self.dislikes = dislikes
         self.userRating = userRating; self.userReaction = userReaction
+        self.authorID = authorID; self.publishedAt = publishedAt
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, title, description, category, cuisine, prepTime, cookTime
         case servings, difficulty, rating, author, imageURL, tags, ingredients
         case instructions, isUserCreated, likes, dislikes, userRating, userReaction
+        case authorID, publishedAt
     }
 
     // Older locally saved recipes may not have newer reaction fields.
@@ -88,6 +112,9 @@ struct Recipe: Identifiable, Codable, Hashable {
         dislikes = try c.decodeIfPresent(Int.self, forKey: .dislikes) ?? 0
         userRating = try c.decodeIfPresent(Int.self, forKey: .userRating)
         userReaction = try c.decodeIfPresent(String.self, forKey: .userReaction)
+        // Recipes saved before publishing existed have neither field.
+        authorID = try c.decodeIfPresent(UUID.self, forKey: .authorID)
+        publishedAt = try c.decodeIfPresent(Date.self, forKey: .publishedAt)
     }
     var totalMinutes: Int { prepTime + cookTime }
 }

@@ -15,6 +15,19 @@ enum RecipeValidator {
         return true
     }
 
+    // Parses the community server address typed in settings. Must be http(s) with a host,
+    // e.g. "http://127.0.0.1:8080". Returns nil if it isn't usable.
+    static func communityServerURL(_ text: String) -> URL? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              let host = url.host, !host.isEmpty
+        else { return nil }
+        return url
+    }
+
     // Returns the line numbers of ingredient lines that aren't in the form
     // "amount | item" (for example "2 cups | Flour"). Blank lines are ignored.
     static func malformedIngredientLines(_ text: String) -> [Int] {
