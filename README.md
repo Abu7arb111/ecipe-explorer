@@ -1,71 +1,95 @@
 # Recipe Explorer — Native iOS App (SwiftUI)
 
-This is a **native SwiftUI implementation** for iOS 17.0+, built for CS 374. It is an offline-first, feature-complete recipe exploration, creation, and cooking companion app.
+**Course:** CS 3714 — Mobile Application Development (iOS), Virginia Tech  
+**Instructor:** Dr. Kirsten Richards  
+**Team Name:** Recipe Explorer  
+**GitHub Repository:** [https://github.com/Abu7arb111/ecipe-explorer](https://github.com/Abu7arb111/ecipe-explorer)  
 
-* **GitHub Repository:** [https://github.com/Abu7arb111/ecipe-explorer](https://github.com/Abu7arb111/ecipe-explorer)
-* **Team Members:** Ahmad Harb, Vedanth Subramanian, Tylor Newcomb, Insung
+### Team Roster & Roles
+* **Ahmad Harb** (`ahmadalharb1987@vt.edu`) — Recipe Sharing & Community System Lead, REST Backend Architecture, Token-Based Ownership Security
+* **Vedanth Subramanian** (`vedanths@vt.edu`) — Input Validation Engine, Automated Unit Testing Suite, Defensive Storage Error Recovery
+* **Tylor Newcomb** (`tnewcomb@vt.edu`) — Data Architecture & Models, Dietary Tag Filtering, Smart Grocery List Aggregator
+* **Insung** — UI/UX Lead, Hands-Free Cook Mode, Interactive Recipe Detail, Kitchen Timer & Local Notifications
 
 ---
 
-## How to Run in Xcode
+## One-Click Execution & Setup Instructions
 
-1. Open `RecipeExplorer.xcodeproj` in Xcode on macOS.
-2. Select the `RecipeExplorer` target. Under **Signing & Capabilities**, select your Personal Team if prompted.
-3. Choose an iPhone Simulator (e.g. iPhone 16 or 17) or physical iOS device.
-4. Press **Cmd + R** to run the app, or **Cmd + U** to run all automated unit tests.
-5. Deployment target: **iOS 17.0+** (no third-party pods, packages, or API keys required).
+The project is configured for **immediate, zero-configuration one-click execution** in Xcode:
 
-### Sharing recipes between users (optional server)
+1. **Open the Project:**
+   Double-click `RecipeExplorer.xcodeproj` to open it in Xcode.
+2. **Select Destination:**
+   In the Xcode toolbar scheme selector (top bar), choose any iOS Simulator (e.g., **iPhone 16**, **iPhone 17**, or **iPhone 15 Pro** running iOS 17.0+).
+3. **Run the App (Cmd + R):**
+   Click the **Play / Run** button or press **⌘R**.
+   * *Zero Configuration:* No manual modifications to Development Team, Apple ID signing, or Bundle Identifiers are required for Simulator execution.
+   * *Zero Dependencies:* No CocoaPods, Carthage, or third-party Swift Packages are required—the application is 100% native SwiftUI and standard Foundation/Combine frameworks.
+4. **Run Unit Tests (Cmd + U):**
+   Press **⌘U** to run all **41 automated unit tests** in `RecipeExplorerTests`.
 
-The Community tab works out of the box with an **on-device demo feed** (a few read-only recipes from sample authors plus anything you publish). To share recipes between real users, run the included community server (Python 3.9+, standard library only):
+---
+
+## Community Recipe Sharing (Optional Server)
+
+Recipe Explorer includes a complete **Community Publishing & Sharing System**:
+* **Out-of-the-box (Offline Demo Feed):** Works immediately with no external setup. The Community tab displays pre-seeded community recipes and any recipes you publish locally.
+* **Multi-User Real-Time Sharing (LAN / Local Server):** To share recipes between different physical devices or simulators, run the lightweight companion server included in `community-server/` (requires standard Python 3.9+, standard library only):
 
 ```bash
 cd community-server
-python3 server.py                 # http://127.0.0.1:8080, data saved to community-data.json
-python3 server.py --host 0.0.0.0  # also reachable from iPhones on the same Wi-Fi
+python3 server.py                 # Runs at http://127.0.0.1:8080 (Simulator)
+python3 server.py --host 0.0.0.0  # Reachable from physical iPhones on the same Wi-Fi
 ```
 
-Then in the app: **Community tab → gear icon → Community server**, enter `http://127.0.0.1:8080` (Simulator) or `http://<your-Mac's-IP>:8080` (physical iPhone), and tap Save. To demo two users, run the app on two different simulators pointed at the same server: each install has its own author identity.
+In the app:
+1. Navigate to the **Community** tab.
+2. Tap the **Gear Icon** in the top navigation bar.
+3. Enter `http://127.0.0.1:8080` (for Simulator) or `http://<your-Mac's-IP>:8080` (for physical device) and tap **Save**.
+4. To test multi-user interaction, launch two different simulators: each installation generates a unique author identity and token, allowing independent publishing, editing, and copying.
 
-Server tests: `cd community-server && python3 test_server.py`
+To run the automated server test suite:
+```bash
+cd community-server
+python3 test_server.py
+```
 
 ---
 
-## Implemented Features (100% Complete)
+## Feature Overview (100% Complete)
 
 ### 1. Recipe Browsing & Multi-Criteria Search
-* Two-column adaptive recipe card feed with visual ratings and prep time badges.
+* Responsive two-column adaptive grid feed with high-resolution imagery and visual rating badges.
 * Category filter chips: *All, Breakfast, Lunch, Dinner, Vegetarian, Quick & Easy*.
-* **Dietary Tag Filtering**: Instant filtering by *Vegetarian, Vegan, Gluten-Free, High Protein, Quick & Easy*.
-* Real-time search across titles, descriptions, cuisines, dietary tags, and ingredient names.
+* **Dietary Tag Filtering**: Real-time filtering by *Vegetarian, Vegan, Gluten-Free, High Protein, Quick & Easy*.
+* Deep search engine indexing recipe titles, descriptions, cuisines, dietary tags, and ingredient lists.
 * Sorting selector: *Featured, Highest Rated, Quickest*.
 
 ### 2. Interactive Recipe Detail Experience
-* Hero recipe image with offline fallback placeholder.
-* Ingredient checklist with **persistent session checkmarks** saved across app restarts.
-* **One-Tap Grocery List Export**: Adds recipe ingredients directly into the Smart Grocery List.
+* Hero imagery with asynchronous loading and offline fallback placeholders.
+* Interactive ingredient checklist with **persistent session checkmarks** saved across app restarts.
+* **One-Tap Grocery List Export**: Bulk-adds all recipe ingredients directly into the Smart Grocery List.
 * Interactive 1–5 star personal rating selector.
-* Reversible like and dislike reaction counters that prevent count inflation.
+* Reversible thumbs up / thumbs down reaction counters preventing artificial count inflation.
 * Social reposting: Clones recipes into "My Recipes" with credited author attribution.
 
 ### 3. Hands-Free Step-by-Step Cooking Mode ("Cook Mode")
-* Full-screen, high-contrast cooking walkthrough designed for kitchen counters.
-* Step counter (`Step X of Y`) with animated progress bar.
-* Oversized text and bold typography for readability from a distance.
-* Built-in floating step timer with Start/Pause/Reset controls.
-* Completion celebration screen upon finishing all recipe steps.
+* Full-screen, high-contrast cooking walkthrough optimized for kitchen counter use.
+* Step indicator (`Step X of Y`) with animated progress bar.
+* Oversized typography for easy readability from a distance.
+* Built-in floating step timer with Start, Pause, and Reset controls.
+* Interactive step checklist and completion celebration screen upon finishing all recipe steps.
 
 ### 4. Background Kitchen Timer & System Notifications
-* Monospaced countdown timer directly inside the recipe detail screen.
-* Integrates with Apple's `UserNotifications` framework (`UNUserNotificationCenter`) to schedule a local alert banner and chime when the countdown finishes—even if the app is backgrounded or the screen is locked.
+* Monospaced countdown timer directly embedded in the recipe detail screen.
+* Integrates with Apple's `UserNotifications` framework (`UNUserNotificationCenter`) to schedule a local alert banner and chime when the countdown finishes—even if the app is backgrounded or the device is locked.
 
 ### 5. Smart Grocery Shopping Checklist
-* Dedicated 3rd tab in the primary navigation bar.
-* Filter by *All, To Buy,* or *Purchased*.
-* Strike-through checkmark toggling for purchased groceries.
-* Quick-add bar for custom items (e.g., "Milk", "Eggs").
-* Swipe-to-delete support.
-* Toolbar options to "Clear Purchased" and "Clear All".
+* Dedicated tab in primary navigation hierarchy.
+* Filter views by *All, To Buy,* or *Purchased*.
+* Interactive strike-through checkmark toggling for purchased items.
+* Quick-add input bar for custom items (e.g., "Milk", "Eggs").
+* Swipe-to-delete support and toolbar actions to "Clear Purchased" and "Clear All".
 * Formatted text export via iOS `ShareLink` for messaging shopping lists.
 
 ### 6. Chef Profile & Stats
@@ -79,15 +103,25 @@ Server tests: `cd community-server && python3 test_server.py`
 * Defensive `UserDefaults` serialization with `do-catch` recovery; corrupted files safely fall back to sample recipes and surface a modal alert explaining the recovery.
 
 ### 8. Community Publishing & Author-Owned Editing
-* **Publish to Community** from any of your recipes' detail screens; other users browse it in the new **Community** tab (search by title, author, tag, or ingredient; filter to "Published by Me"; pull to refresh).
-* **Author-only controls**: only the recipe's author sees Edit, Unpublish, and Delete. Everyone else sees "Only the author can edit or delete it" and can **Save a Copy** to their own My Recipes.
-* **Edits sync**: editing a published recipe updates the community copy too; deleting a published recipe removes it from the feed for everyone. **Unpublish** removes it from the feed but keeps it in My Recipes.
-* **Ownership is enforced by the backend, not just the UI**: each install has a stable author ID (separate from the editable chef name) and a private token. The server and the on-device feed both reject edits/deletes whose author ID or token doesn't match the recipe's owner.
-* **Privacy**: your likes, dislikes, and personal star rating are stripped before a recipe is shared.
-* "Published" badges and a Published count appear in the Chef Profile; badges re-sync with the feed on every refresh.
-* Existing recipes saved before this feature are automatically owned by the install that created them.
+* **Publish to Community**: Authors can publish custom recipes from the detail screen to the community feed.
+* **Author-Only Permissions**: Only the recipe's original author can edit, unpublish, or delete a published recipe. Other users see an ownership notice and can "Save a Copy" to their personal collection.
+* **Ownership Security**: Enforced on the backend using stable UUID author IDs and private authentication tokens. Both the server and local actor reject unauthorized modification or deletion attempts.
+* **Privacy by Design**: Personal reactions (likes/dislikes) and individual star ratings are automatically stripped before recipes are published to the community.
 
-> Limitation: the author token works on a trust-on-first-use basis. It stops other users from changing your recipes, but it isn't a full account system: reinstalling the app creates a new identity, and the server should only run on a trusted network or behind HTTPS.
+---
+
+## Known Issues and Limitations
+
+In accordance with course documentation requirements, the following known limitations are noted:
+
+1. **Local Simulator Notification Permissions:**
+   * On certain fresh iOS Simulator instances, Apple's `UNUserNotificationCenter` permission prompt may occasionally appear behind active modal sheets. If background timer notifications do not sound in the Simulator, verify that notifications are enabled under Simulator *Settings → Notifications → RecipeExplorer*.
+2. **Community Server Trust-On-First-Use Identity:**
+   * The companion community sharing backend utilizes a lightweight, token-based trust-on-first-use authentication model rather than a heavy enterprise identity provider (like OAuth or Firebase Auth). Reinstalling the app generates a new UUID author identity.
+3. **Image Loading Dependent on Remote Connectivity:**
+   * Recipe images load asynchronously via Apple's `AsyncImage`. When offline or without active internet, the app gracefully falls back to themed SF Symbol category placeholders (`fork.knife`, `carrot.fill`, etc.).
+4. **Interface Orientation:**
+   * The application is optimized for portrait orientation on iPhone devices to maintain a clean single-hand mobile UX, though Cook Mode provides high-contrast full-screen typography adaptable to larger screens.
 
 ---
 
