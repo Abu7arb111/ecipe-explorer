@@ -26,10 +26,15 @@ struct RecipeFormView: View {
     }
     // Error message listing which ingredient lines are in the wrong format, or nil if fine.
     private var ingredientError: String? {
+        if ingredientsText == originalIngredientsText { return nil }
         let bad = RecipeValidator.malformedIngredientLines(ingredientsText)
         guard !bad.isEmpty else { return nil }
         let list = bad.map(String.init).joined(separator: ", ")
         return "Line \(list): use the format amount | ingredient (example: 2 cups | Flour)."
+    }
+
+    private var originalIngredientsText: String? {
+        existing?.ingredients.map { "\($0.amount) | \($0.item)" }.joined(separator: "\n")
     }
     // The Save button is only enabled when the required fields are filled in
     // and there are no validation errors.
@@ -100,7 +105,7 @@ struct RecipeFormView: View {
         title = existing.title; summary = existing.description; category = existing.category
         cuisine = existing.cuisine; imageURL = existing.imageURL
         prep = existing.prepTime; cook = existing.cookTime; servings = existing.servings
-        ingredientsText = existing.ingredients.map { "\($0.amount) | \($0.item)" }.joined(separator: "\n")
+        ingredientsText = originalIngredientsText ?? ""
         instructionsText = existing.instructions.joined(separator: "\n")
     }
 
@@ -108,7 +113,10 @@ struct RecipeFormView: View {
     private func save() {
         // Safety check in case Save is triggered while the form is invalid.
         guard valid, !isSaving else { return }
-        let ingredients = RecipeValidator.parseIngredients(ingredientsText)
+        let originalIngredients = existing?.ingredients ?? []
+        let ingredients = ingredientsText == originalIngredientsText
+            ? originalIngredients
+            : RecipeValidator.parseIngredients(ingredientsText, preserving: originalIngredients)
         let instructions = RecipeValidator.parseInstructions(instructionsText)
         guard !ingredients.isEmpty && !instructions.isEmpty else { return }
         let newRecipe = Recipe(

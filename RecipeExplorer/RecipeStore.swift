@@ -304,6 +304,13 @@ import Combine
                 edited.publishedAt = nil
             }
         }
+        if let checked = checkedIngredients[edited.id] {
+            let retained = checked.intersection(edited.ingredients.map(\.id))
+            if retained != checked {
+                checkedIngredients[edited.id] = retained.isEmpty ? nil : retained
+                if local == nil { save() }
+            }
+        }
         if local != nil { update(edited) }
     }
 

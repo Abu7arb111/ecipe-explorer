@@ -44,13 +44,20 @@ enum RecipeValidator {
     }
 
     // Turns the ingredients text box into Ingredient objects, one per non-blank line.
-    static func parseIngredients(_ text: String) -> [Ingredient] {
-        text.components(separatedBy: .newlines)
+    static func parseIngredients(_ text: String, preserving existing: [Ingredient] = []) -> [Ingredient] {
+        // Match each unchanged row once, in order, even when there are duplicates.
+        var previousIDs = Dictionary(grouping: existing.reversed()) { ingredient in
+            [ingredient.amount.trimmingCharacters(in: .whitespaces), ingredient.item.trimmingCharacters(in: .whitespaces)]
+        }.mapValues { $0.map(\.id) }
+        return text.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
             .map { line in
                 let parts = line.split(separator: "|", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
-                return parts.count == 2 ? Ingredient(item: parts[1], amount: parts[0]) : Ingredient(item: parts[0], amount: "")
+                let amount = parts.count == 2 ? parts[0] : ""
+                let item = parts.count == 2 ? parts[1] : parts[0]
+                let id = previousIDs[[amount, item]]?.popLast() ?? UUID()
+                return Ingredient(id: id, item: item, amount: amount)
             }
     }
 

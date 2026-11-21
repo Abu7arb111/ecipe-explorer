@@ -151,6 +151,31 @@ final class RecipeStoreTests: XCTestCase {
         XCTAssertFalse(store.isIngredientChecked(recipeID: r.id, ingredientID: ingID))
     }
 
+    func testRecipeEditsPreserveUnchangedIngredientCheckmarksAndRemoveStaleOnes() async throws {
+        var recipe = makeRecipe()
+        recipe.ingredients.append(Ingredient(item: "Salt", amount: "1 tsp"))
+        store.add(recipe)
+        let salt = recipe.ingredients[0]
+        let pepper = recipe.ingredients[1]
+        let secondSalt = recipe.ingredients[2]
+        store.toggleIngredientChecked(recipeID: recipe.id, ingredientID: salt.id)
+        store.toggleIngredientChecked(recipeID: recipe.id, ingredientID: pepper.id)
+
+        recipe.title = "Updated Recipe"
+        recipe.ingredients = RecipeValidator.parseIngredients(
+            "1 tsp | Salt\n1 tsp | Salt\n2 tsp | Pepper",
+            preserving: recipe.ingredients
+        )
+        try await store.saveEdits(recipe)
+
+        let reloaded = RecipeStore(defaults: defaults)
+        let saved = try XCTUnwrap(reloaded.recipe(withID: recipe.id))
+        XCTAssertEqual(saved.title, "Updated Recipe")
+        XCTAssertEqual(saved.ingredients.map(\.id).prefix(2), [salt.id, secondSalt.id][...])
+        XCTAssertNotEqual(saved.ingredients[2].id, pepper.id)
+        XCTAssertEqual(reloaded.checkedIngredients[recipe.id], [salt.id])
+    }
+
     // User profile updates persist across relaunches.
     func testUserProfilePersistsAcrossLaunches() {
         store.updateProfile(name: "Executive Chef", bio: "Cooking delicious food", dietaryPreferences: ["Vegan", "Gluten-Free"])
