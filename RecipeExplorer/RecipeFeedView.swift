@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RecipeFeedView: View {
     @EnvironmentObject private var store: RecipeStore
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let favoritesOnly: Bool
     @State private var query = ""
     @State private var selectedCategory = "All"
@@ -10,14 +11,16 @@ struct RecipeFeedView: View {
 
     private let categories = ["All", "Breakfast", "Lunch", "Dinner", "Vegetarian", "Quick & Easy"]
     private let dietaryOptions = ["All Diets", "Vegetarian", "Vegan", "Gluten-Free", "High Protein", "Quick & Easy"]
-    private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+    private var columns: [GridItem] {
+        [GridItem(dynamicTypeSize.isAccessibilitySize ? .flexible() : .adaptive(minimum: 155), spacing: 12)]
+    }
 
     private var filtered: [Recipe] {
+        let words = query.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
         var results = store.recipes.filter { recipe in
             let matchesFavorite = !favoritesOnly || store.isFavorite(recipe)
             let matchesCategory = selectedCategory == "All" || recipe.category == selectedCategory || recipe.tags.contains(selectedCategory)
             let matchesDiet = selectedDiet == "All Diets" || recipe.tags.contains(selectedDiet)
-            let words = query.lowercased().split(separator: " ").map(String.init)
             let searchable = ([recipe.title, recipe.description, recipe.category, recipe.cuisine] + recipe.tags + recipe.ingredients.map(\.item)).joined(separator: " ").lowercased()
             return matchesFavorite && matchesCategory && matchesDiet && words.allSatisfy(searchable.contains)
         }
@@ -27,6 +30,10 @@ struct RecipeFeedView: View {
     }
 
     var body: some View {
+        let results = filtered
+        let filterLayout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
+            : AnyLayout(HStackLayout(spacing: 8))
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 if !favoritesOnly {
@@ -45,6 +52,7 @@ struct RecipeFeedView: View {
                                 .padding(.vertical, 8)
                                 .background(selectedCategory == category ? Color.orange : Color(.secondarySystemBackground), in: Capsule())
                                 .foregroundStyle(selectedCategory == category ? Color.white : Color.primary)
+                                .accessibilityAddTraits(selectedCategory == category ? .isSelected : [])
                         }
                     }.padding(.horizontal)
                 }
@@ -70,35 +78,34 @@ struct RecipeFeedView: View {
                                 .overlay(Capsule().stroke(selectedDiet == diet ? Color.green : Color.clear, lineWidth: 1.2))
                                 .foregroundStyle(selectedDiet == diet ? Color.green : Color.secondary)
                             }
+                            .accessibilityAddTraits(selectedDiet == diet ? .isSelected : [])
                         }
                     }.padding(.horizontal)
                 }
 
                 // Count and Sorting selector
-                HStack {
-                    Text("\(filtered.count) recipes").foregroundStyle(.secondary).font(.subheadline)
-                    Spacer()
+                filterLayout {
+                    Text("\(results.count) recipes")
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     Picker("Sort", selection: $sort) {
                         Text("Featured").tag("Featured")
                         Text("Highest Rated").tag("Highest Rated")
                         Text("Quickest").tag("Quickest")
-                    }.pickerStyle(.menu)
+                    }
+                    .pickerStyle(.menu)
                 }.padding(.horizontal)
 
                 // Recipe Cards Grid
                 LazyVGrid(columns: columns, spacing: 15) {
-                    ForEach(filtered) { recipe in
-                        NavigationLink {
-                            RecipeDetailView(recipeID: recipe.id)
-                        } label: {
-                            RecipeCardView(recipe: recipe)
-                        }
-                        .buttonStyle(.plain)
+                    ForEach(results) { recipe in
+                        RecipeCardView(recipe: recipe)
                     }
                 }.padding(.horizontal)
 
                 // Empty Search / Filter State
-                if filtered.isEmpty {
+                if results.isEmpty {
                     VStack(spacing: 12) {
                         ContentUnavailableView("No matching recipes", systemImage: "magnifyingglass", description: Text("Try another search query or clear your dietary filter."))
                         if selectedCategory != "All" || selectedDiet != "All Diets" || !query.isEmpty {
@@ -118,6 +125,7 @@ struct RecipeFeedView: View {
             .padding(.bottom, 80)
         }
         .navigationTitle(favoritesOnly ? "Favorites" : "Recipe Explorer")
+        .navigationBarTitleDisplayMode(dynamicTypeSize.isAccessibilitySize ? .inline : .automatic)
         .searchable(text: $query, prompt: "Search names, tags or ingredients")
     }
 }
@@ -126,46 +134,60 @@ private struct RecipeCardView: View {
     @EnvironmentObject private var store: RecipeStore
     let recipe: Recipe
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ZStack(alignment: .topTrailing) {
-                RecipeImageView(url: recipe.imageURL).frame(height: 135).clipped()
-                Button {
-                    store.toggleFavorite(recipe)
-                } label: {
-                    Image(systemName: store.isFavorite(recipe) ? "heart.fill" : "heart")
-                        .foregroundStyle(store.isFavorite(recipe) ? Color.red : Color.primary)
-                        .padding(9).background(.regularMaterial, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .padding(7)
-            }
-            Text(recipe.title)
-                .font(.subheadline.bold())
-                .lineLimit(2)
-                .frame(height: 37, alignment: .topLeading)
-            
-            HStack(spacing: 4) {
-                Text("\(recipe.category) • \(recipe.totalMinutes) min")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if let firstTag = recipe.tags.first {
-                    Text(firstTag)
-                        .font(.system(size: 9, weight: .bold))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Color.orange.opacity(0.15), in: Capsule())
+        let isFavorite = store.isFavorite(recipe)
+        NavigationLink {
+            RecipeDetailView(recipeID: recipe.id)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                RecipeImageView(url: recipe.imageURL)
+                    .frame(height: 135)
+                    .clipped()
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(recipe.title)
+                        .font(.subheadline.bold())
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("\(recipe.category) • \(recipe.totalMinutes) min")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if let firstTag = recipe.tags.first {
+                        Text(firstTag)
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.orange.opacity(0.15), in: Capsule())
+                            .foregroundStyle(.orange)
+                    }
+
+                    Label(String(format: "%.1f", recipe.rating), systemImage: "star.fill")
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.orange)
                 }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 9)
             }
-            
-            Label(String(format: "%.1f", recipe.rating), systemImage: "star.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.orange)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 13))
+            .clipShape(RoundedRectangle(cornerRadius: 13))
         }
-        .padding(.bottom, 9)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 13))
-        .clipShape(RoundedRectangle(cornerRadius: 13))
+        .buttonStyle(.plain)
+        .overlay(alignment: .topTrailing) {
+            Button {
+                store.toggleFavorite(recipe)
+            } label: {
+                Image(systemName: isFavorite ? "heart.fill" : "heart")
+                    .foregroundStyle(isFavorite ? Color.red : Color.primary)
+                    .padding(8)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .background(.regularMaterial, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isFavorite ? "Remove from favorites" : "Add to favorites")
+            .accessibilityHint(recipe.title)
+            .padding(7)
+        }
     }
 }
 
