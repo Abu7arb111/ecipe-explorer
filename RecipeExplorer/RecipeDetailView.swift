@@ -5,6 +5,7 @@ import UserNotifications
 struct RecipeDetailView: View {
     @EnvironmentObject private var store: RecipeStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     let recipeID: UUID
 
     @State private var showingEdit = false
@@ -14,7 +15,9 @@ struct RecipeDetailView: View {
     @State private var showingGrocerySuccess = false
     @State private var showingCookingMode = false
     @State private var secondsLeft: Int = 0
-    @State private var running = false
+    @State private var timerDeadline: Date?
+    @State private var notificationTask: Task<Void, Never>?
+    @State private var notificationID: String?
     @State private var timerMessage = false
     @State private var showingPublishConfirmation = false
     @State private var showingUnpublishConfirmation = false
@@ -22,6 +25,7 @@ struct RecipeDetailView: View {
     @State private var communityError: String? = nil
 
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    private var running: Bool { timerDeadline != nil }
     // Works for recipes in My Recipes and for recipes from the community feed.
     private var recipe: Recipe? { store.recipe(withID: recipeID) }
     // Someone else's (or your) published recipe that isn't stored in My Recipes on this device.
@@ -150,20 +154,23 @@ struct RecipeDetailView: View {
                                 Text(timeString).font(.system(size: 36, weight: .semibold, design: .monospaced))
                                 HStack {
                                     Button(running ? "Pause" : "Start") {
-                                        if secondsLeft == 0 { secondsLeft = max(recipe.cookTime, 1) * 60 }
-                                        running.toggle()
                                         if running {
-                                            scheduleNotification(seconds: secondsLeft, title: recipe.title)
+                                            refreshTimer()
+                                            timerDeadline = nil
+                                            cancelNotification()
                                         } else {
-                                            cancelNotification(title: recipe.title)
+                                            if secondsLeft == 0 { secondsLeft = max(recipe.cookTime, 1) * 60 }
+                                            let deadline = Date().addingTimeInterval(TimeInterval(secondsLeft))
+                                            timerDeadline = deadline
+                                            scheduleNotification(for: recipe, deadline: deadline)
                                         }
                                     }
                                     .buttonStyle(.borderedProminent)
                                     .tint(.orange)
 
                                     Button("Reset") {
-                                        running = false
-                                        cancelNotification(title: recipe.title)
+                                        timerDeadline = nil
+                                        cancelNotification()
                                         secondsLeft = max(recipe.cookTime, 1) * 60
                                     }
                                     .buttonStyle(.bordered)
@@ -248,14 +255,9 @@ struct RecipeDetailView: View {
                     Text("All ingredients for \(recipe.title) have been added to your shopping checklist.")
                 }
                 .alert("Timer complete", isPresented: $timerMessage) { Button("OK", role: .cancel) {} }
-                .onReceive(ticker) { _ in
-                    if running && secondsLeft > 0 {
-                        secondsLeft -= 1
-                        if secondsLeft == 0 {
-                            running = false
-                            timerMessage = true
-                        }
-                    }
+                .onReceive(ticker) { _ in refreshTimer() }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { refreshTimer() }
                 }
             } else {
                 ContentUnavailableView("Recipe unavailable", systemImage: "exclamationmark.triangle")
@@ -395,30 +397,54 @@ struct RecipeDetailView: View {
         String(format: "%02d:%02d", secondsLeft / 60, secondsLeft % 60)
     }
 
-    // Schedules a local system notification when countdown finishes
-    private func scheduleNotification(seconds: Int, title: String) {
-        let center = UNUserNotificationCenter.current()
-        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-            guard granted else { return }
-            let content = UNMutableNotificationContent()
-            content.title = "Cooking Timer Complete!"
-            content.body = "Your timer for \(title) has finished."
-            content.sound = .default
-
-            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(max(seconds, 1)), repeats: false)
-            let request = UNNotificationRequest(identifier: "recipe-timer-\(title)", content: content, trigger: trigger)
-            center.add(request)
+    private func refreshTimer() {
+        guard let deadline = timerDeadline else { return }
+        secondsLeft = max(0, Int(ceil(deadline.timeIntervalSinceNow)))
+        if secondsLeft == 0 {
+            timerDeadline = nil
+            timerMessage = true
         }
     }
 
-    private func cancelNotification(title: String) {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["recipe-timer-\(title)"])
+    private func scheduleNotification(for recipe: Recipe, deadline: Date) {
+        let center = UNUserNotificationCenter.current()
+        cancelNotification()
+        let identifier = "recipe-timer-\(recipe.id)-\(UUID())"
+        notificationID = identifier
+        notificationTask = Task { @MainActor in
+            guard (try? await center.requestAuthorization(options: [.alert, .sound])) == true,
+                  !Task.isCancelled, timerDeadline == deadline,
+                  deadline > Date() else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "Cooking Timer Complete!"
+            content.body = "Your timer for \(recipe.title) has finished."
+            content.sound = .default
+
+            let trigger = UNTimeIntervalNotificationTrigger(
+                timeInterval: max(1, deadline.timeIntervalSinceNow), repeats: false
+            )
+            let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+            try? await center.add(request)
+            if Task.isCancelled {
+                center.removePendingNotificationRequests(withIdentifiers: [identifier])
+            }
+        }
+    }
+
+    private func cancelNotification() {
+        notificationTask?.cancel()
+        notificationTask = nil
+        if let notificationID {
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [notificationID])
+            self.notificationID = nil
+        }
     }
 }
 
 /// Full-screen, high-contrast, step-by-step cooking experience.
 struct CookingModeView: View {
     let recipe: Recipe
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.dismiss) private var dismiss
     @State private var currentStep = 0
     @State private var stepTimerSeconds = 0
@@ -427,106 +453,32 @@ struct CookingModeView: View {
     private let stepTicker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        VStack(spacing: 20) {
-            // Header with dismiss and recipe title
-            HStack {
-                Button("Exit") { dismiss() }
-                    .font(.headline)
-                    .foregroundStyle(.orange)
-                Spacer()
-                Text(recipe.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Spacer()
-                Text("\(currentStep + 1)/\(recipe.instructions.count)")
-                    .font(.subheadline.monospacedDigit().bold())
-            }
-            .padding(.horizontal)
-
-            // Step Progress Bar
-            ProgressView(value: Double(currentStep + 1), total: Double(recipe.instructions.count))
-                .tint(.orange)
-                .padding(.horizontal)
-
-            Spacer()
-
-            // Step Content Card
-            VStack(spacing: 16) {
-                Text("Step \(currentStep + 1)")
-                    .font(.title3.weight(.heavy))
-                    .foregroundStyle(.orange)
-
-                Text(recipe.instructions[currentStep])
-                    .font(.title2.weight(.medium))
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(6)
-                    .padding()
-                    .frame(maxWidth: .infinity, minHeight: 180)
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
-            }
-            .padding(.horizontal)
-
-            Spacer()
-
-            // Mini Cooking Timer in Cook Mode
-            VStack(spacing: 8) {
-                Text(timerString)
-                    .font(.system(size: 28, weight: .bold, design: .monospaced))
-                HStack(spacing: 12) {
-                    Button(timerRunning ? "Pause Timer" : "Start 5m Timer") {
-                        if stepTimerSeconds == 0 { stepTimerSeconds = 300 }
-                        timerRunning.toggle()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
-
-                    Button("Reset") {
-                        timerRunning = false
-                        stepTimerSeconds = 0
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
-
-            Spacer()
-
-            // Navigation Controls (Previous / Next / Finish)
-            HStack(spacing: 20) {
-                Button {
-                    if currentStep > 0 { currentStep -= 1 }
-                } label: {
-                    HStack {
-                        Image(systemName: "chevron.left")
-                        Text("Previous")
-                    }
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(currentStep == 0 ? Color.gray.opacity(0.2) : Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
-                    .foregroundStyle(currentStep == 0 ? Color.secondary : Color.primary)
-                }
-                .disabled(currentStep == 0)
-
-                Button {
-                    if currentStep < recipe.instructions.count - 1 {
-                        currentStep += 1
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 20) {
+                    header
+                    if recipe.instructions.isEmpty {
+                        ContentUnavailableView("No cooking steps", systemImage: "fork.knife")
                     } else {
-                        showingFinishedAlert = true
+                        ProgressView(value: Double(currentStep + 1), total: Double(recipe.instructions.count))
+                            .tint(.orange)
+
+                        if geometry.size.width >= 700 && !dynamicTypeSize.isAccessibilitySize {
+                            HStack(alignment: .top, spacing: 24) {
+                                stepContent
+                                VStack(spacing: 20) {
+                                    timerControls
+                                    navigationControls
+                                }
+                                .frame(width: 300)
+                            }
+                        } else {
+                            compactCookingLayout
+                        }
                     }
-                } label: {
-                    HStack {
-                        Text(currentStep == recipe.instructions.count - 1 ? "Finish Cooking" : "Next Step")
-                        Image(systemName: currentStep == recipe.instructions.count - 1 ? "checkmark.circle.fill" : "chevron.right")
-                    }
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.orange, in: RoundedRectangle(cornerRadius: 14))
-                    .foregroundStyle(.white)
                 }
+                .padding()
             }
-            .padding(.horizontal)
-            .padding(.bottom, 20)
         }
         .navigationBarHidden(true)
         .alert("Congratulations!", isPresented: $showingFinishedAlert) {
@@ -538,6 +490,117 @@ struct CookingModeView: View {
             if timerRunning && stepTimerSeconds > 0 {
                 stepTimerSeconds -= 1
                 if stepTimerSeconds == 0 { timerRunning = false }
+            }
+        }
+    }
+
+    private var header: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 8))
+            : AnyLayout(HStackLayout(spacing: 12))
+        return layout {
+            Button("Exit") { dismiss() }
+                .font(.headline)
+                .foregroundStyle(.orange)
+                .frame(minHeight: 44)
+            Text(recipe.title)
+                .font(.subheadline.weight(.semibold))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+            if !recipe.instructions.isEmpty {
+                Text("\(currentStep + 1)/\(recipe.instructions.count)")
+                    .font(.subheadline.monospacedDigit().bold())
+                    .accessibilityLabel("Step \(currentStep + 1) of \(recipe.instructions.count)")
+            }
+        }
+    }
+
+    private var compactCookingLayout: some View {
+        VStack(spacing: 20) {
+            stepContent
+            timerControls
+            navigationControls
+        }
+    }
+
+    private var stepContent: some View {
+        VStack(spacing: 16) {
+            Text("Step \(currentStep + 1)")
+                .font(.title3.weight(.heavy))
+                .foregroundStyle(.orange)
+                .accessibilityAddTraits(.isHeader)
+
+            Text(recipe.instructions[currentStep])
+                .font(.title2.weight(.medium))
+                .multilineTextAlignment(.center)
+                .lineSpacing(6)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, minHeight: 180)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var timerControls: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 12))
+        return VStack(spacing: 8) {
+            Text(timerString)
+                .font(.title.monospacedDigit().bold())
+            layout {
+                Button(timerRunning ? "Pause Timer" : "Start 5m Timer") {
+                    if stepTimerSeconds == 0 { stepTimerSeconds = 300 }
+                    timerRunning.toggle()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
+
+                Button("Reset") {
+                    timerRunning = false
+                    stepTimerSeconds = 0
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+
+    private var navigationControls: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 12))
+        return layout {
+            Button {
+                if currentStep > 0 { currentStep -= 1 }
+            } label: {
+                HStack {
+                    Image(systemName: "chevron.left")
+                    Text("Previous")
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(currentStep == 0 ? Color.gray.opacity(0.2) : Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+                .foregroundStyle(currentStep == 0 ? Color.secondary : Color.primary)
+            }
+            .disabled(currentStep == 0)
+
+            Button {
+                if currentStep < recipe.instructions.count - 1 {
+                    currentStep += 1
+                } else {
+                    showingFinishedAlert = true
+                }
+            } label: {
+                HStack {
+                    Text(currentStep == recipe.instructions.count - 1 ? "Finish Cooking" : "Next Step")
+                    Image(systemName: currentStep == recipe.instructions.count - 1 ? "checkmark.circle.fill" : "chevron.right")
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.orange, in: RoundedRectangle(cornerRadius: 14))
+                .foregroundStyle(.white)
             }
         }
     }
