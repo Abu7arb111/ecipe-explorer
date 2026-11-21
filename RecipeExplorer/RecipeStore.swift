@@ -6,6 +6,7 @@ import Combine
 @MainActor final class RecipeStore: ObservableObject {
     // Keys used to save and load data. Public so the tests can use them too.
     static let recipesKey = "recipeExplorer.recipes.v1"
+    static let unreadableRecipesBackupKey = "recipeExplorer.recipes.unreadableBackup.v1"
     static let favoritesKey = "recipeExplorer.favorites.v1"
     static let groceryKey = "recipeExplorer.grocery.v1"
     static let profileKey = "recipeExplorer.profile.v1"
@@ -53,8 +54,9 @@ import Combine
             do {
                 recipes = try JSONDecoder().decode([Recipe].self, from: data)
             } catch {
+                defaults.set(data, forKey: Self.unreadableRecipesBackupKey)
                 recipes = SampleRecipes.all
-                storageError = "Your saved recipes couldn't be read, so the sample recipes were loaded instead."
+                storageError = "Your saved recipes couldn't be read. A backup was kept and the sample recipes were loaded."
             }
         } else {
             // First launch: nothing saved yet, so start with the samples.
@@ -111,7 +113,7 @@ import Combine
             recipes[index].authorID = identity.id
             migrated = true
         }
-        if migrated { save() }
+        if migrated { save(.recipes) }
     }
 
     private static func loadOrCreateIdentity(in defaults: UserDefaults) -> AuthorIdentity {
@@ -138,7 +140,7 @@ import Combine
     // Adds the recipe to favorites, or removes it if it's already there.
     func toggleFavorite(_ recipe: Recipe) {
         if !favorites.insert(recipe.id).inserted { favorites.remove(recipe.id) }
-        save()
+        save(.favorites)
     }
 
     // MARK: - Recipe CRUD
@@ -148,13 +150,14 @@ import Combine
         var recipe = recipe
         if recipe.isUserCreated && recipe.authorID == nil { recipe.authorID = identity.id }
         recipes.insert(recipe, at: 0)
-        save()
+        save(.recipes)
     }
 
     // Replaces an existing recipe (matched by id). Does nothing if it isn't found.
     func update(_ recipe: Recipe) {
         guard let index = recipes.firstIndex(where: { $0.id == recipe.id }) else { return }
-        recipes[index] = recipe; save()
+        recipes[index] = recipe
+        save(.recipes)
     }
 
     // Only recipes you own can be deleted, not the built-in samples. Checks the
@@ -165,7 +168,7 @@ import Combine
         recipes.removeAll { $0.id == recipe.id }
         favorites.remove(recipe.id)
         checkedIngredients.removeValue(forKey: recipe.id)
-        save()
+        save(.recipes, .favorites, .checkedIngredients)
     }
 
     // Like/dislike toggles: tapping the same button again removes the reaction,
@@ -273,7 +276,7 @@ import Combine
         if let index = recipes.firstIndex(where: { $0.id == local.id }) {
             recipes[index].authorID = identity.id
             recipes[index].publishedAt = published.publishedAt ?? Date()
-            save()
+            save(.recipes)
         }
     }
 
@@ -304,14 +307,24 @@ import Combine
                 edited.publishedAt = nil
             }
         }
+        var checklistChanged = false
         if let checked = checkedIngredients[edited.id] {
             let retained = checked.intersection(edited.ingredients.map(\.id))
             if retained != checked {
                 checkedIngredients[edited.id] = retained.isEmpty ? nil : retained
-                if local == nil { save() }
+                checklistChanged = true
             }
         }
-        if local != nil { update(edited) }
+        if let index = recipes.firstIndex(where: { $0.id == edited.id }) {
+            recipes[index] = edited
+            if checklistChanged {
+                save(.recipes, .checkedIngredients)
+            } else {
+                save(.recipes)
+            }
+        } else if checklistChanged {
+            save(.checkedIngredients)
+        }
     }
 
     /// Removes your recipe from the community feed but keeps it in My Recipes.
@@ -326,7 +339,7 @@ import Combine
         communityRecipes.removeAll { $0.id == recipe.id }
         if let index = recipes.firstIndex(where: { $0.id == recipe.id }) {
             recipes[index].publishedAt = nil
-            save()
+            save(.recipes)
         }
     }
 
@@ -382,7 +395,7 @@ import Combine
                 changed = true
             }
         }
-        if changed { save() }
+        if changed { save(.recipes) }
     }
 
     // MARK: - Smart Grocery List Operations
@@ -393,7 +406,7 @@ import Combine
             GroceryItem(item: ing.item, amount: ing.amount, recipeTitle: recipe?.title, isPurchased: false)
         }
         groceryList.append(contentsOf: newItems)
-        save()
+        save(.grocery)
     }
 
     // Adds a custom item typed in by the user. Returns false if invalid/empty.
@@ -404,7 +417,7 @@ import Combine
         let trimmedAmount = amount.trimmingCharacters(in: .whitespacesAndNewlines)
         let newItem = GroceryItem(item: trimmedItem, amount: trimmedAmount.isEmpty ? "1" : trimmedAmount, recipeTitle: "Custom Item", isPurchased: false)
         groceryList.append(newItem)
-        save()
+        save(.grocery)
         return true
     }
 
@@ -412,25 +425,25 @@ import Combine
     func toggleGroceryItemPurchased(_ item: GroceryItem) {
         guard let index = groceryList.firstIndex(where: { $0.id == item.id }) else { return }
         groceryList[index].isPurchased.toggle()
-        save()
+        save(.grocery)
     }
 
     // Deletes an individual grocery item.
     func deleteGroceryItem(_ item: GroceryItem) {
         groceryList.removeAll { $0.id == item.id }
-        save()
+        save(.grocery)
     }
 
     // Clears all completed/purchased items.
     func clearPurchasedGroceryItems() {
         groceryList.removeAll { $0.isPurchased }
-        save()
+        save(.grocery)
     }
 
     // Clears the entire grocery list.
     func clearAllGroceryItems() {
         groceryList.removeAll()
-        save()
+        save(.grocery)
     }
 
     // MARK: - Ingredient Checklist State (Detail View Persistence)
@@ -445,12 +458,12 @@ import Combine
             current.remove(ingredientID)
         }
         checkedIngredients[recipeID] = current
-        save()
+        save(.checkedIngredients)
     }
 
     func clearCheckedIngredients(recipeID: UUID) {
         checkedIngredients.removeValue(forKey: recipeID)
-        save()
+        save(.checkedIngredients)
     }
 
     // MARK: - User Profile Management
@@ -462,20 +475,31 @@ import Combine
             bio: bio.trimmingCharacters(in: .whitespacesAndNewlines),
             dietaryPreferences: dietaryPreferences
         )
-        save()
+        save(.profile)
     }
 
     // MARK: - Persistence Engine
 
-    // Writes recipes, favorites, grocery list, user profile, and checklists to storage.
-    // If encoding fails, show an alert instead of silently losing the user's changes.
-    private func save() {
+    private enum StorageSection {
+        case recipes, favorites, grocery, profile, checkedIngredients
+    }
+
+    // Encode all affected sections first so an encoding failure leaves their saved data intact.
+    private func save(_ sections: StorageSection...) {
         do {
-            defaults.set(try JSONEncoder().encode(recipes), forKey: Self.recipesKey)
-            defaults.set(try JSONEncoder().encode(favorites), forKey: Self.favoritesKey)
-            defaults.set(try JSONEncoder().encode(groceryList), forKey: Self.groceryKey)
-            defaults.set(try JSONEncoder().encode(userProfile), forKey: Self.profileKey)
-            defaults.set(try JSONEncoder().encode(checkedIngredients), forKey: Self.checkedIngredientsKey)
+            let encoder = JSONEncoder()
+            let writes: [(key: String, data: Data)] = try sections.map { section in
+                switch section {
+                case .recipes: return (Self.recipesKey, try encoder.encode(recipes))
+                case .favorites: return (Self.favoritesKey, try encoder.encode(favorites))
+                case .grocery: return (Self.groceryKey, try encoder.encode(groceryList))
+                case .profile: return (Self.profileKey, try encoder.encode(userProfile))
+                case .checkedIngredients: return (Self.checkedIngredientsKey, try encoder.encode(checkedIngredients))
+                }
+            }
+            for write in writes {
+                defaults.set(write.data, forKey: write.key)
+            }
         } catch {
             storageError = "Your changes couldn't be saved. They may be lost when the app closes."
         }

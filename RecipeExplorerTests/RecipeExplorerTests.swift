@@ -228,6 +228,38 @@ final class RecipeStoreTests: XCTestCase {
         XCTAssertNotNil(broken.storageError)
     }
 
+    func testUnrelatedChangesDoNotOverwriteUnreadableRecipes() throws {
+        let unreadable = Data("invalid recipes".utf8)
+        defaults.set(unreadable, forKey: RecipeStore.recipesKey)
+        let recovering = RecipeStore(defaults: defaults)
+        let sample = try XCTUnwrap(recovering.recipes.first)
+
+        XCTAssertTrue(recovering.addCustomGroceryItem(item: "Milk", amount: "1"))
+        recovering.toggleFavorite(sample)
+        recovering.updateProfile(name: "Chef", bio: "", dietaryPreferences: [])
+        recovering.toggleIngredientChecked(recipeID: sample.id, ingredientID: sample.ingredients[0].id)
+
+        XCTAssertEqual(defaults.data(forKey: RecipeStore.recipesKey), unreadable)
+        let reloaded = RecipeStore(defaults: defaults)
+        XCTAssertEqual(reloaded.groceryList.first?.item, "Milk")
+        XCTAssertTrue(reloaded.isFavorite(sample))
+        XCTAssertEqual(reloaded.userProfile.name, "Chef")
+        XCTAssertTrue(reloaded.isIngredientChecked(recipeID: sample.id, ingredientID: sample.ingredients[0].id))
+    }
+
+    func testAddingRecipeAfterRecoveryKeepsBackupOfUnreadableRecipes() {
+        let unreadable = Data("invalid recipes".utf8)
+        defaults.set(unreadable, forKey: RecipeStore.recipesKey)
+        let recovering = RecipeStore(defaults: defaults)
+
+        recovering.add(makeRecipe("New Recipe"))
+
+        XCTAssertEqual(defaults.data(forKey: RecipeStore.unreadableRecipesBackupKey), unreadable)
+        let reloaded = RecipeStore(defaults: defaults)
+        XCTAssertNil(reloaded.storageError)
+        XCTAssertEqual(reloaded.recipes.first?.title, "New Recipe")
+    }
+
     // If saved grocery data is corrupted, resets cleanly and reports error.
     func testCorruptedSavedGroceryFallsBackAndReportsError() {
         defaults.set(Data("invalid grocery binary".utf8), forKey: RecipeStore.groceryKey)
